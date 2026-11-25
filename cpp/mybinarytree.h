@@ -16,5 +16,7 @@ public:
         return n;
     }
 
+#if !defined(TEST_DEPTH) && !defined(TEST_HEIGHT)
     #include "student.inc"
+#endif
 };

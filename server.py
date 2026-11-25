@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import resource
 import shutil
 import subprocess
@@ -9,7 +10,8 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent
 PORT = 8000
-FUNCTIONS = ("addRoot", "addLeft", "addRight")
+FUNCTIONS = ("addRoot", "addLeft", "addRight", "depth", "height")
+RECURSIVE = ("depth", "height")
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 
 
@@ -23,13 +25,38 @@ def run(command, folder, function):
                           errors="replace", timeout=20, preexec_fn=limit_cpu)
 
 
-def run_student_code(code, function="addRoot", taken=False):
+def only_function(code, name):
+    """Lets students paste the whole struct: keeps only int name() { ... }.
+    Other lines become empty, so line numbers stay the same."""
+    # Hide comments and text in quotes, so their braces are not counted
+    hidden = re.sub(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"',
+                    lambda m: re.sub(r"[^\n]", " ", m.group()), code, flags=re.S)
+    found = re.search(rf"\bint\s+{name}\s*\(\s*\)\s*\{{", hidden)
+    if not found:
+        return code
+    level = 0
+    end = len(code)
+    for i in range(found.end() - 1, len(code)):
+        level += {"{": 1, "}": -1}.get(hidden[i], 0)
+        if level == 0:
+            end = i + 1
+            break
+    return "\n" * code[:found.start()].count("\n") + code[found.start():end]
+
+
+def run_student_code(code, function="addRoot", taken=False, target=1):
     # Work in a temporary copy, so your own project files are not changed
     with tempfile.TemporaryDirectory() as temp:
         cpp = Path(temp) / "cpp"
         cpp.mkdir()
-        for name in ("node.h", "mybinarytree.h", "main.cpp", "trace.py"):
+        script = "trace_recursive.py" if function in RECURSIVE else "trace.py"
+        for name in ("node.h", "mybinarytree.h", "main.cpp", script):
             shutil.copy(PROJECT / "cpp" / name, cpp / name)
+        if function in RECURSIVE:
+            code = only_function(code, function)
+            argument = str(target)
+        else:
+            argument = "taken" if taken else "free"
         (cpp / "student.inc").write_text(code + "\n")
 
         try:
@@ -39,8 +66,8 @@ def run_student_code(code, function="addRoot", taken=False):
             if build.returncode != 0:
                 return {"error": "compile", "details": build.stderr}
 
-            traced = run(["gdb", "-q", "-batch", "-x", "cpp/trace.py", "--args",
-                          "cpp/program", "taken" if taken else "free"],
+            traced = run(["gdb", "-q", "-batch", "-x", f"cpp/{script}", "--args",
+                          "cpp/program", argument],
                          temp, function)
         except subprocess.TimeoutExpired:
             return {"error": "timeout"}
@@ -78,8 +105,11 @@ class Handler(SimpleHTTPRequestHandler):
         if data.get("function") not in FUNCTIONS:
             self.send_error(400)
             return
+        target = data.get("target")
+        if target not in range(1, 7):
+            target = 1
         result = run_student_code(data["code"], data["function"],
-                                  data.get("taken") is True)
+                                  data.get("taken") is True, target)
         body = json.dumps(result).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
