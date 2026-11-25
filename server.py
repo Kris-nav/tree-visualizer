@@ -1,0 +1,93 @@
+import json
+import os
+import resource
+import shutil
+import subprocess
+import tempfile
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parent
+PORT = 8000
+FUNCTIONS = ("addRoot", "addLeft", "addRight")
+ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
+
+
+def limit_cpu():
+    # Ends a program stuck in an endless loop, even if gdb was stopped first
+    resource.setrlimit(resource.RLIMIT_CPU, (10, 12))
+
+
+def run(command, folder, function):
+    return subprocess.run(command, cwd=folder, env={**os.environ, "TRACE_FUNCTION": function}, capture_output=True, text=True,
+                          errors="replace", timeout=20, preexec_fn=limit_cpu)
+
+
+def run_student_code(code, function="addRoot", taken=False):
+    # Work in a temporary copy, so your own project files are not changed
+    with tempfile.TemporaryDirectory() as temp:
+        cpp = Path(temp) / "cpp"
+        cpp.mkdir()
+        for name in ("node.h", "mybinarytree.h", "main.cpp", "trace.py"):
+            shutil.copy(PROJECT / "cpp" / name, cpp / name)
+        (cpp / "student.inc").write_text(code + "\n")
+
+        try:
+            build = run(["g++", "-g", "-O0", "-Wall", "-Werror=return-type",
+                         "-std=c++17", f"-DTEST_{function.upper()}",
+                         "cpp/main.cpp", "-o", "cpp/program"], temp, function)
+            if build.returncode != 0:
+                return {"error": "compile", "details": build.stderr}
+
+            traced = run(["gdb", "-q", "-batch", "-x", "cpp/trace.py", "--args",
+                          "cpp/program", "taken" if taken else "free"],
+                         temp, function)
+        except subprocess.TimeoutExpired:
+            return {"error": "timeout"}
+
+        result_file = cpp / "trace.json"
+        if not result_file.exists():
+            return {"error": "trace", "details": traced.stdout + traced.stderr}
+
+        result = json.loads(result_file.read_text())
+        result["warnings"] = build.stderr
+        thrown = cpp / "thrown.txt"
+        result["thrown"] = thrown.read_text() if thrown.exists() else None
+        return result
+
+
+class Handler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(PROJECT), **kwargs)
+
+    def do_POST(self):
+        # Only accept requests sent by this page, not by other websites
+        host = self.headers.get("Host")
+        if (self.path != "/run" or host not in ALLOWED_HOSTS
+                or self.headers.get("Origin") != f"http://{host}"
+                or self.headers.get("Content-Type") != "application/json"):
+            self.send_error(403)
+            return
+
+        length = int(self.headers.get("Content-Length", 0))
+        if length > 20000:
+            self.send_error(413)
+            return
+
+        data = json.loads(self.rfile.read(length))
+        if data.get("function") not in FUNCTIONS:
+            self.send_error(400)
+            return
+        result = run_student_code(data["code"], data["function"],
+                                  data.get("taken") is True)
+        body = json.dumps(result).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+if __name__ == "__main__":
+    print(f"Open http://127.0.0.1:{PORT}   (press Ctrl+C to stop)")
+    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

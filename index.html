@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tree Visualizer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>Binary Tree Visualizer</h1>
+
+    <section class="panel">
+      <h2>Visual: addRoot(1)</h2>
+      <p>root = NULL &nbsp; | &nbsp; size = 0</p>
+      <div id="visual">Empty tree</div>
+    </section>
+
+    <div class="controls">
+      <button id="run">Run</button>
+      <button disabled>Back</button>
+      <button disabled>Play</button>
+      <button disabled>Pause</button>
+      <button disabled>Next</button>
+      <button id="reset">Reset</button>
+      <label>Speed <input type="range" min="1" max="5" value="3" disabled></label>
+    </div>
+
+    <section class="panel">
+      <h2>Your Code</h2>
+      <textarea id="code" rows="12" spellcheck="false"
+        placeholder="Type your addRoot function here..."></textarea>
+    </section>
+
+    <section class="panel">
+      <h2>Errors and Hints</h2>
+      <p id="message">Type your function, then click Run.</p>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

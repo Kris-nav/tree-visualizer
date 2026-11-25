@@ -1,0 +1,91 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+  background: #0d1117;
+  color: #e6edf3;
+  font-family: sans-serif;
+}
+
+main {
+  max-width: 800px;
+  margin: auto;
+}
+
+h1 {
+  text-align: center;
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+
+.panel {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+#visual {
+  height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b949e;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #238636;
+  color: white;
+  cursor: pointer;
+}
+
+button:disabled {
+  background: #30363d;
+  color: #8b949e;
+  cursor: not-allowed;
+}
+
+textarea {
+  width: 100%;
+  padding: 12px;
+  background: #0d1117;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 15px;
+  resize: vertical;
+}
+#message {
+  white-space: pre-wrap;
+}
+
+#codeView {
+  white-space: pre;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+#codeView .active {
+  background: #1f4d2b;
+}
