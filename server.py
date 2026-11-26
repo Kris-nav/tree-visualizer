@@ -10,7 +10,9 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent
 PORT = 8000
-FUNCTIONS = ("addRoot", "addLeft", "addRight", "depth", "height")
+FUNCTIONS = ("addRoot", "addLeft", "addRight", "depth", "height",
+             "remove", "preorder", "inorder", "postorder", "breadthfirst")
+TRAVERSALS = ("preorder", "inorder", "postorder", "breadthfirst")
 RECURSIVE = ("depth", "height")
 ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
 
@@ -49,12 +51,20 @@ def run_student_code(code, function="addRoot", taken=False, target=1):
     with tempfile.TemporaryDirectory() as temp:
         cpp = Path(temp) / "cpp"
         cpp.mkdir()
-        script = "trace_recursive.py" if function in RECURSIVE else "trace.py"
-        for name in ("node.h", "mybinarytree.h", "main.cpp", script):
+        if function in RECURSIVE:
+            script = "trace_recursive.py"
+        elif function in TRAVERSALS:
+            script = "trace_traversal.py"
+        else:
+            script = "trace.py"
+        for name in ("node.h", "mybinarytree.h", "arrayqueue.h", "main.cpp",
+                     script):
             shutil.copy(PROJECT / "cpp" / name, cpp / name)
         if function in RECURSIVE:
             code = only_function(code, function)
             argument = str(target)
+        elif function == "remove":
+            argument = str(target if target in range(1, 5) else 1)
         else:
             argument = "taken" if taken else "free"
         (cpp / "student.inc").write_text(code + "\n")
@@ -80,6 +90,8 @@ def run_student_code(code, function="addRoot", taken=False, target=1):
         result["warnings"] = build.stderr
         thrown = cpp / "thrown.txt"
         result["thrown"] = thrown.read_text() if thrown.exists() else None
+        returned = cpp / "result.txt"
+        result["returned"] = int(returned.read_text()) if returned.exists() else None
         return result
 
 

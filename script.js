@@ -20,7 +20,23 @@ options.innerHTML = `
   <label>Function:
     <select id="function">
       <option>addRoot</option><option>addLeft</option><option>addRight</option>
-      <option>depth</option><option>height</option>
+      <option>depth</option><option>height</option><option>remove</option>
+      <option>preorder</option><option>inorder</option>
+      <option>postorder</option><option>breadthfirst</option>
+    </select>
+  </label>
+  <label id="versionLabel">Code:
+    <select id="codeVersion">
+      <option value="full">Full code</option>
+      <option value="case">Case code only</option>
+    </select>
+  </label>
+  <label id="caseLabel">Test tree:
+    <select id="removeCase">
+      <option value="1">Case 1: Removing a leaf (remove 7)</option>
+      <option value="2">Case 2: One child moves up (remove 3)</option>
+      <option value="3">Case 2 at the root (remove 1)</option>
+      <option value="4">Case 3: Two children (remove 2)</option>
     </select>
   </label>
   <label id="takenLabel"><input type="checkbox" id="taken">
@@ -29,6 +45,37 @@ document.querySelector(".controls").before(options);
 const functionMenu = document.getElementById("function");
 const takenBox = document.getElementById("taken");
 const heading = status.previousElementSibling;
+const caseMenu = document.getElementById("removeCase");
+const isRemove = () => functionMenu.value === "remove";
+const versionMenu = document.getElementById("codeVersion");
+
+// [parent, side, child] for each practice tree on the remove slides
+const removeCases = {
+  1: { target: 7, links: [[1,"left",2], [1,"right",3], [2,"left",4],
+       [2,"right",5], [5,"left",7]] },
+  2: { target: 3, links: [[1,"left",2], [1,"right",3], [2,"left",4],
+       [2,"right",5], [3,"right",6]] },
+  3: { target: 1, links: [[1,"left",2], [2,"left",4], [2,"right",5]] },
+  4: { target: 2, links: [[1,"left",2], [1,"right",3], [2,"left",4],
+       [2,"right",5], [3,"right",6], [5,"left",7]] }
+};
+
+// If only a case snippet is typed, these lines are added around it
+function completeCode(code) {
+  const plain = { text: code, provided: new Set() };
+  if (!isRemove() || versionMenu.value === "full") return plain;
+  const before = ["int remove(node* n) {", "  int res = n->elem;"];
+  if (caseMenu.value === "3") {
+    before.push("  node* child = left(n) ? left(n) : right(n);");
+  }
+  const after = caseMenu.value === "4" ? ["  return res;", "}"]
+    : ["  size--;", "  free(n);", "  return res;", "}"];
+  const middle = code.replace(/\s+$/, "").split("\n");
+  const lines = [...before, ...middle, ...after];
+  const provided = new Set(lines.map((_, i) => i).filter(i =>
+    i < before.length || i >= before.length + middle.length));
+  return { text: lines.join("\n"), provided };
+}
 
 // depth and height use the 6-node practice tree
 const startNode = { depth: 4, height: 1 };
@@ -40,8 +87,20 @@ const callsBox = document.createElement("div");
 callsBox.id = "calls";
 visual.after(callsBox);
 
+// What each traversal should print for the sample tree
+const traversalAnswers = {
+  preorder: "1 2 4 5 7 3 6",
+  inorder: "4 2 7 5 1 3 6",
+  postorder: "4 7 5 2 6 3 1",
+  breadthfirst: "1 2 3 4 5 6 7"
+};
+const isTraversal = () => functionMenu.value in traversalAnswers;
+const words = text => text.trim().split(/\s+/).filter(Boolean);
+
 function selectedCall() {
   const name = functionMenu.value;
+  if (isTraversal()) return `${name}()`;
+  if (isRemove()) return `remove(node ${removeCases[caseMenu.value].target})`;
   if (isRecursive()) return `${name}() starting at node ${startNode[name]}`;
   if (name === "addRoot") return "addRoot(1)";
   if (takenBox.checked) return `${name}(root, 4)`;
@@ -54,6 +113,27 @@ function startingTree() {
   const state = { line: 0, root: null, size: 0, variables: {}, nodes: {} };
   if (name === "addRoot") return state;
   const node = (elem, parent) => ({ elem, left: null, right: null, parent });
+  if (isTraversal()) {
+    state.nodes[1] = node(1, null);
+    for (const [parent, side, child] of removeCases[4].links) {
+      state.nodes[parent][side] = String(child);
+      state.nodes[child] = node(child, String(parent));
+    }
+    state.root = "1";
+    state.size = 7;
+    return state;
+  }
+  if (isRemove()) {
+    state.nodes[1] = node(1, null);
+    for (const [parent, side, child] of removeCases[caseMenu.value].links) {
+      state.nodes[parent][side] = String(child);
+      state.nodes[child] = node(child, String(parent));
+    }
+    state.root = "1";
+    state.size = Object.keys(state.nodes).length;
+    state.variables = { n: String(removeCases[caseMenu.value].target) };
+    return state;
+  }
   if (isRecursive()) {
     for (let i = 1; i <= 6; i++) state.nodes[i] = node(i, null);
     for (const [parent, side, child] of [[1, "left", "2"], [1, "right", "3"],
@@ -119,9 +199,16 @@ function layout(state) {
 }
 
 function draw(state) {
-  status.textContent = isRecursive()
+  status.textContent = isTraversal()
+    ? (functionMenu.value === "breadthfirst"
+      ? "Gray = not queued, purple = in the queue, yellow = n, green = finished."
+      : "Blue = not reached, yellow = current, purple = waiting, green = printed.") +
+      " #1 means printed first."
+    : isRecursive()
     ? "Click a node to start there. Yellow = running, purple = waiting, green = returned."
-    : `root = ${state.root ? "points to a node" : "NULL"}  |  size = ${state.size}`;
+    : `root = ${state.root ? "points to a node" : "NULL"}  |  size = ${state.size}` +
+      Object.entries(state.numbers || {})
+        .map(([name, value]) => `  |  ${name} = ${value}`).join("");
   visual.replaceChildren();
   const positions = layout(state);
   const keys = Object.keys(positions);
@@ -183,12 +270,20 @@ function draw(state) {
   for (const key of keys) {
     const { x, y } = positions[key];
     const node = state.nodes[key];
-    const colors = { running: "#d29922", waiting: "#8957e5", done: "#238636" };
+    const colors = { running: "#d29922", waiting: "#8957e5", done: "#238636",
+                     unseen: "#484f58" };
     const circle = svg("circle", { cx: x, cy: y, r: 26,
       fill: colors[state.marks?.[key]] || "#1f6feb",
       stroke: "#e6edf3", "stroke-width": 2 });
     const label = svg("text", { x, y: y + 6, fill: "white", "text-anchor": "middle",
       "font-size": 18 }, node.invalid ? "?" : node.elem);
+    if (node.freed) {
+      circle.setAttribute("fill", "#3d1d1f");
+      circle.setAttribute("stroke", "#f85149");
+      circle.setAttribute("stroke-dasharray", "5 4");
+      picture.append(svg("text", { x, y: y + 46, fill: "#f85149",
+        "text-anchor": "middle", "font-size": 14 }, "freed"));
+    }
     if (isRecursive()) {
       for (const part of [circle, label]) {
         part.style.cursor = "pointer";
@@ -200,6 +295,10 @@ function draw(state) {
       }
     }
     picture.append(circle, label);
+    if (state.order && key in state.order) {
+      picture.append(svg("text", { x: x + 32, y: y + 5, fill: "#3fb950",
+        "font-size": 15, "font-weight": "bold" }, `#${state.order[key]}`));
+    }
     if (state.values && key in state.values) {
       picture.append(svg("text", { x: x + 34, y: y + 5, fill: "#3fb950",
         "font-size": 16, "font-weight": "bold" }, `= ${state.values[key]}`));
@@ -296,9 +395,104 @@ function recursiveState(index) {
   return state;
 }
 
+// What changed between the previous step and this one
+function traversalChanges(before, step) {
+  const changes = [];
+  const added = words(step.output).slice(words(before?.output || "").length);
+  if (added.length) changes.push(`Printed ${added.join(", ")}.`);
+  if (functionMenu.value === "breadthfirst") {
+    const old = before?.queue || [];
+    const now = step.queue || [];
+    let gone = 0;  // how many nodes left from the front
+    while (gone < old.length &&
+           old.slice(gone).some((value, i) => now[i] !== value)) gone++;
+    if (gone) changes.push(`Node ${old.slice(0, gone).join(", ")} left the queue.`);
+    const joined = now.slice(old.length - gone);
+    if (joined.length) changes.push(`Node ${joined.join(", ")} joined the queue.`);
+  } else {
+    const oldDepth = before?.stack.length || 0;
+    const top = step.stack[step.stack.length - 1];
+    if (step.stack.length > oldDepth && top) {
+      changes.push(`Started ${top.name}` +
+        (top.node === null ? "()." : ` at node ${top.node}.`));
+    } else if (step.stack.length < oldDepth) {
+      changes.push("A call finished" +
+        (top && top.node !== null ? `, so we are back at node ${top.node}.` : "."));
+    }
+  }
+  return changes.join(" ");
+}
+
+function traversalState(index) {
+  const state = startingTree();
+  state.marks = {};
+  state.order = {};
+  state.stack = [];
+  state.queue = null;
+  state.output = "";
+  const breadth = functionMenu.value === "breadthfirst";
+  if (breadth) {
+    for (const key of Object.keys(state.nodes)) state.marks[key] = "unseen";
+  }
+  if (!run || index === 0) return state;
+
+  const step = run.steps[index - 1];
+  Object.assign(state, { line: step.line, stack: step.stack,
+                         queue: step.queue, output: step.output });
+  words(step.output).forEach((value, i) => {
+    state.order[value] ??= i + 1;
+    state.marks[value] = "done";
+  });
+  const mark = (value, color) => {
+    if (value !== null && value in state.nodes) state.marks[value] = color;
+  };
+  for (const value of step.queue || []) mark(value, "waiting");
+  if (!breadth) step.stack.forEach(call => mark(call.node, "waiting"));
+  const top = step.stack[step.stack.length - 1];
+  if (top) mark(top.node, "running");
+
+  state.text = traversalChanges(run.steps[index - 2], step) ||
+    (top ? "The highlighted line is about to run." : "The function has finished.");
+  return state;
+}
+
+function showTraversal(state) {
+  const add = (text, className) => {
+    const box = document.createElement("div");
+    box.className = className;
+    box.textContent = text;
+    callsBox.append(box);
+    return box;
+  };
+  add(`Output: ${state.output || "(nothing yet)"}`, "card");
+  if (functionMenu.value === "breadthfirst") {
+    const title = add("Queue (front on the left, back on the right)", "");
+    title.style.cssText = "margin-top:8px;font-weight:bold";
+    const row = add("", "");
+    row.style.cssText = "display:flex;gap:6px;flex-wrap:wrap";
+    for (const value of state.queue || []) {
+      const item = document.createElement("div");
+      item.className = "card";
+      item.style.cssText = "min-width:40px;text-align:center";
+      item.textContent = value ?? "NULL";
+      row.append(item);
+    }
+    if (!state.queue?.length) row.textContent = "(empty)";
+    return;
+  }
+  const title = add("Waiting calls (newest on top)", "");
+  title.style.cssText = "margin-top:8px;font-weight:bold";
+  [...state.stack].reverse().forEach((call, i) => {
+    add((i === 0 ? "▶ " : "") + call.name +
+      (call.node === null ? "()" : `(node ${call.node})`) +
+      (i === 0 ? "  running" : "  waiting"), i === 0 ? "card running" : "card");
+  });
+}
+
 function showCalls(state) {
-  callsBox.hidden = !isRecursive();
+  callsBox.hidden = !isRecursive() && !isTraversal();
   callsBox.replaceChildren();
+  if (isTraversal()) return showTraversal(state);
   if (!isRecursive()) return;
   const title = document.createElement("strong");
   title.textContent = "Waiting calls (newest on top)";
@@ -318,7 +512,8 @@ function showCalls(state) {
 
 function show(index) {
   current = index;
-  const state = isRecursive() ? recursiveState(current) : steps[current];
+  const state = isTraversal() ? traversalState(current)
+    : isRecursive() ? recursiveState(current) : steps[current];
   draw(state);
   showCalls(state);
   [...codeView.children].forEach((row, i) =>
@@ -330,7 +525,7 @@ function show(index) {
   message.textContent = current === steps.length - 1 && finalMessage
     ? finalMessage
     : `Step ${current} of ${steps.length - 1}. The highlighted line has just run.`;
-  if (isRecursive() && current > 0) {
+  if ((isRecursive() || isTraversal()) && current > 0) {
     message.textContent = `Step ${current} of ${steps.length - 1}. ${state.text}` +
       (current === steps.length - 1 ? "\n\n" + finalMessage : "");
   }
@@ -387,6 +582,113 @@ function recursiveHints(result) {
   }
   if (name === "height") {
     text += "\nThe order of the two calls inside max() is chosen by the compiler.";
+  }
+  if (result.warnings) text += "\n\nCompiler warnings:\n" + result.warnings;
+  return text;
+}
+
+function removeHints(result) {
+  if (result.crash === "SIGINT") {
+    return "Stopped: it ran too long. Check the highlighted line for an endless loop.";
+  }
+  if (result.crash) {
+    return `Your program stopped (${result.crash}) on the highlighted line. ` +
+      "Check for NULL pointers, or a node freed twice.";
+  }
+  const choice = caseMenu.value;
+  const target = removeCases[choice].target;
+  const first = result.start;
+  const last = result.steps[result.steps.length - 1];
+
+  // Nodes are matched by their values, using the starting tree
+  const addressOf = {};
+  const valueAt = {};
+  for (const [key, node] of Object.entries(first.nodes)) {
+    addressOf[node.elem] = key;
+    valueAt[key] = node.elem;
+  }
+  const nameOf = key => key === null ? "NULL" : `node ${valueAt[key] ?? "?"}`;
+
+  const expected = JSON.parse(JSON.stringify(first.nodes));
+  let root = first.root;
+  const twoChildren = choice === "4";
+  if (!twoChildren) {
+    const key = addressOf[target];
+    const old = expected[key];
+    const child = old.left || old.right;
+    if (old.parent) {
+      const parent = expected[old.parent];
+      parent[parent.left === key ? "left" : "right"] = child;
+    } else {
+      root = child;
+    }
+    if (child) expected[child].parent = old.parent;
+    delete expected[key];
+  }
+  const size = Object.keys(expected).length;
+  const answer = twoChildren ? -1 : target;
+
+  const hints = [];
+  if (last.root !== root) {
+    hints.push(`root should point to ${nameOf(root)}.`);
+  }
+  for (const [key, node] of Object.entries(expected)) {
+    const actual = last.nodes[key];
+    if (!actual) continue;  // no longer reachable: its link is reported already
+    if (actual.freed) {
+      hints.push(`${nameOf(key)} was freed, but it should stay in the tree.`);
+      continue;
+    }
+    for (const link of ["left", "right", "parent"]) {
+      if (actual[link] !== node[link]) {
+        hints.push(`${nameOf(key)}'s ${link} should be ${nameOf(node[link])}.`);
+      }
+    }
+  }
+  if (last.size !== size) hints.push(`size is ${last.size}, but it should be ${size}.`);
+  if (result.returned !== answer) {
+    hints.push(`remove should return ${answer}, but it returned ${result.returned}.`);
+  }
+  const gone = last.nodes[addressOf[target]];
+  if (!twoChildren && !(gone && gone.freed)) {
+    hints.push(`Node ${target} was not seen being freed. Did you call free(n)?`);
+  }
+
+  let text = hints.length ? "Logic hint: " + hints.join(" ")
+    : twoChildren
+      ? "Finished. Node 2 has two children, so remove returned -1 and changed nothing."
+      : `Finished. Node ${target} was removed correctly and remove returned ${target}.`;
+  if (result.warnings) text += "\n\nCompiler warnings:\n" + result.warnings;
+  return text;
+}
+
+function traversalHints(result) {
+  if (result.crash === "SIGINT") {
+    return "Stopped: it ran too long. Check the highlighted line for an endless loop.";
+  }
+  if (result.crash) {
+    return `Your program stopped (${result.crash}) on the highlighted line. ` +
+      "Check that you never use a NULL node, and that every recursion stops.";
+  }
+  if (result.limit) {
+    return "Stopped after 300 steps. Check that your loop or recursion ends.";
+  }
+  const name = functionMenu.value;
+  const output = result.steps[result.steps.length - 1].output;
+  const got = words(output).join(" ");
+  const expected = traversalAnswers[name];
+  let text;
+  if (got !== expected) {
+    const other = Object.keys(traversalAnswers)
+      .find(key => traversalAnswers[key] === got);
+    text = `Logic hint: expected ${expected} but your output is ` +
+      `${got || "empty"}.` +
+      (other ? ` That is the ${other} order. Check where you visit the node.` : "");
+  } else if (output !== expected + " ") {
+    text = "The order is correct, but the slides print each number followed " +
+      "by one space.";
+  } else {
+    text = `Finished. Your ${name} output is correct: ${expected}`;
   }
   if (result.warnings) text += "\n\nCompiler warnings:\n" + result.warnings;
   return text;
@@ -482,18 +784,35 @@ runButton.addEventListener("click", async () => {
     message.textContent = "Please type your function first.";
     return;
   }
+  if (isRemove()) {
+    // Check that the code matches the chosen version
+    const isFull = /\bint\s+remove\s*\(/.test(codeBox.value);
+    if (versionMenu.value === "full" && !isFull) {
+      message.textContent = "Full code must start with int remove(node* n). " +
+        'To run only part of it, choose "Case code only" in the Code menu.';
+      return;
+    }
+    if (versionMenu.value === "case" && isFull) {
+      message.textContent = 'This is the full function. Choose "Full code" ' +
+        "in the Code menu.";
+      return;
+    }
+  }
   reset();
   busy = true;
   runButton.disabled = resetButton.disabled = codeBox.disabled = true;
-  functionMenu.disabled = takenBox.disabled = true;
+  functionMenu.disabled = takenBox.disabled = caseMenu.disabled = true;
+  versionMenu.disabled = true;
   message.textContent = "Compiling and running...";
+  const complete = completeCode(codeBox.value);
   try {
     const response = await fetch("/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: codeBox.value, function: functionMenu.value,
+      body: JSON.stringify({ code: complete.text, function: functionMenu.value,
                              taken: takenBox.checked,
-                             target: startNode[functionMenu.value] || 1 })
+                             target: isRemove() ? Number(caseMenu.value)
+                               : startNode[functionMenu.value] || 1 })
     });
     if (!response.ok) throw new Error("server error " + response.status);
     const result = await response.json();
@@ -506,16 +825,18 @@ runButton.addEventListener("click", async () => {
     } else if (result.error || result.steps.length === 0) {
       message.textContent = "No steps were recorded.\n\n" + (result.details || "");
     } else {
-      if (isRecursive()) {
+      if (isRecursive() || isTraversal()) {
         run = result;
         steps = [null, ...result.steps];
-        finalMessage = recursiveHints(result);
+        finalMessage = isTraversal() ? traversalHints(result)
+          : recursiveHints(result);
       } else {
         steps = [result.start, ...result.steps];
-        finalMessage = findHints(result);
+        finalMessage = isRemove() ? removeHints(result) : findHints(result);
       }
-      codeView.replaceChildren(...codeBox.value.split("\n").map((text, i) => {
+      codeView.replaceChildren(...complete.text.split("\n").map((text, i) => {
         const row = document.createElement("div");
+        if (complete.provided.has(i)) row.className = "provided";
         row.textContent = `${String(i + 1).padStart(3)}  ${text}`;
         return row;
       }));
@@ -527,7 +848,8 @@ runButton.addEventListener("click", async () => {
     message.textContent = "Could not run the code. Is server.py running? " + error.message;
   }
   runButton.disabled = resetButton.disabled = codeBox.disabled = false;
-  functionMenu.disabled = takenBox.disabled = false;
+  functionMenu.disabled = takenBox.disabled = caseMenu.disabled = false;
+  versionMenu.disabled = false;
   busy = false;
 });
 
@@ -541,9 +863,14 @@ speed.disabled = false;
 
 function changeOptions() {
   document.getElementById("takenLabel").hidden =
-    functionMenu.value === "addRoot" || isRecursive();
+    functionMenu.value === "addRoot" || isRecursive() || isRemove() ||
+    isTraversal();
+  document.getElementById("caseLabel").hidden = !isRemove();
+  document.getElementById("versionLabel").hidden = !isRemove();
   reset();
 }
 functionMenu.addEventListener("change", changeOptions);
 takenBox.addEventListener("change", reset);
+caseMenu.addEventListener("change", reset);
+versionMenu.addEventListener("change", reset);
 changeOptions();

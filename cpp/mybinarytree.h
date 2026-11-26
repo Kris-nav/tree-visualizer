@@ -1,8 +1,10 @@
 #include <cstdlib>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include "node.h"
 using namespace std;
+#include "arrayqueue.h"
 
 class MyBinaryTree {
 public:
@@ -15,6 +17,10 @@ public:
         n->parent = parent;
         return n;
     }
+
+    // Helpers used by the lecture's remove(n)
+    node* left(node* p) { return p->left; }
+    node* right(node* p) { return p->right; }
 
 #if !defined(TEST_DEPTH) && !defined(TEST_HEIGHT)
     #include "student.inc"

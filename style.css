@@ -89,3 +89,5 @@ textarea {
 #codeView .active {
   background: #1f4d2b;
 }
+
+#codeView .provided { opacity: 0.55; }

@@ -8,6 +8,23 @@ FUNCTION = os.environ.get("TRACE_FUNCTION", "addRoot")
 
 steps = []
 crash = None
+known = {}     # the last information seen for each node
+freed = set()  # nodes that have been given to free()
+
+
+class FreeWatcher(gdb.Breakpoint):
+    """Notes which nodes are freed, without pausing."""
+
+    def __init__(self):
+        super().__init__("free", internal=True)
+        self.silent = True
+
+    def stop(self):
+        # On 64-bit Intel/AMD Linux, free's argument is in the rdi register
+        key = hex(int(gdb.parse_and_eval("(unsigned long) $rdi")))
+        if key in known:
+            freed.add(key)
+        return False
 
 
 def on_stop(event):
@@ -21,20 +38,33 @@ def address(pointer):
     return hex(value) if value else None
 
 
+def line_now(frame):
+    return frame.find_sal().line
+
+
 def snapshot(frame, line, executed):
     root = gdb.parse_and_eval("this->root")
     variables = {}
+    numbers = {}
     to_visit = [root]
 
     block = frame.block()
     while block:
         for symbol in block:
             # Show a local only after its declaration line has run
-            if symbol.is_argument or (symbol.is_variable and symbol.line in executed):
-                value = symbol.value(frame)
-                if str(value.type) == "node *":
+            if not (symbol.is_argument or symbol.is_variable):
+                continue
+            ready = symbol.is_argument or symbol.line in executed
+            value = symbol.value(frame)
+            if str(value.type) == "node *":
+                # "node* child;" runs no code, so show it once it holds a node
+                if ready or (symbol.line < line_now(frame)
+                             and address(value) in known):
                     variables[symbol.name] = address(value)
                     to_visit.append(value)
+            elif ready and str(value.type) == "int" and symbol.is_variable \
+                    and not symbol.is_argument:
+                numbers[symbol.name] = int(value)
         if block.function:
             break
         block = block.superblock
@@ -45,12 +75,17 @@ def snapshot(frame, line, executed):
         key = address(pointer)
         if key is None or key in nodes:
             continue
+        if key in freed:
+            # Its memory is gone: keep only its old value, with no links
+            nodes[key] = {"elem": known[key]["elem"], "left": None,
+                          "right": None, "parent": None, "freed": True}
+            continue
         try:
             data = pointer.dereference()
             info = {"elem": int(data["elem"])}
             for link in ("left", "right", "parent"):
                 info[link] = address(data[link])
-            nodes[key] = info
+            nodes[key] = known[key] = info
             to_visit += [data["left"], data["right"], data["parent"]]
         except gdb.MemoryError:
             nodes[key] = {"invalid": True}
@@ -60,6 +95,7 @@ def snapshot(frame, line, executed):
         "root": address(root),
         "size": int(gdb.parse_and_eval("this->size")),
         "variables": variables,
+        "numbers": numbers,
         "nodes": nodes,
     }
 
@@ -79,6 +115,9 @@ gdb.execute("run")
 
 # The tree as it was before the first line runs
 start = snapshot(gdb.selected_frame(), 0, set())
+
+if FUNCTION == "remove":
+    FreeWatcher()
 
 # After 5 seconds, interrupt the program (this catches endless loops)
 watchdog = subprocess.Popen(
@@ -103,6 +142,11 @@ while len(steps) < 200 and crash is None and in_student_function():
         last = dict(steps[-1] if steps else start)
         last["line"] = line
         steps.append(last)
+
+# Let main() finish, so that it can save what remove() returned
+if FUNCTION == "remove" and crash is None and gdb.selected_inferior().pid != 0 \
+        and not in_student_function():
+    gdb.execute("continue")
 
 watchdog.kill()
 
