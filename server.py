@@ -10,7 +10,7 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent
 PORT = 8000
-FUNCTIONS = ("addRoot", "addLeft", "addRight", "depth", "height",
+FUNCTIONS = ("sibling", "addRoot", "addLeft", "addRight", "depth", "height",
              "remove", "preorder", "inorder", "postorder", "breadthfirst")
 TRAVERSALS = ("preorder", "inorder", "postorder", "breadthfirst")
 RECURSIVE = ("depth", "height")
@@ -62,6 +62,8 @@ def run_student_code(code, function="addRoot", taken=False, target=1):
             shutil.copy(PROJECT / "cpp" / name, cpp / name)
         if function in RECURSIVE:
             code = only_function(code, function)
+            argument = str(target)
+        elif function == "sibling":
             argument = str(target)
         elif function == "remove":
             argument = str(target if target in range(1, 5) else 1)
@@ -118,7 +120,7 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_error(400)
             return
         target = data.get("target")
-        if target not in range(1, 7):
+        if target not in range(1, 8):
             target = 1
         result = run_student_code(data["code"], data["function"],
                                   data.get("taken") is True, target)

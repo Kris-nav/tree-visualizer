@@ -85,6 +85,32 @@ int main() {
     cout.rdbuf(screen);
     return 0;
 }
+#elif defined(TEST_SIBLING)
+// The tree from the sibling slide. The argument is the node to use as n.
+int main(int argc, char* argv[]) {
+    MyBinaryTree* tree = new MyBinaryTree();
+    node* all[8] = {NULL};
+    all[1] = tree->root = tree->create_node(1, NULL);
+    tree->size = 1;
+    auto add = [&](int parent, bool onLeft, int e) {
+        all[e] = tree->create_node(e, all[parent]);
+        (onLeft ? all[parent]->left : all[parent]->right) = all[e];
+        tree->size++;
+    };
+    add(1, true, 2);
+    add(1, false, 3);
+    add(2, true, 4);
+    add(2, false, 5);
+    add(3, false, 6);
+    add(5, true, 7);
+
+    int target = argc > 1 ? stoi(argv[1]) : 4;
+    if (target < 1 || target > 7) target = 4;
+    node* answer = tree->sibling(all[target]);
+    // 0 means NULL. The nodes are numbered 1 to 7.
+    ofstream("cpp/result.txt") << (answer ? answer->elem : 0);
+    return 0;
+}
 #elif defined(TEST_REMOVE)
 // The practice trees from the remove slides. The argument is the case number.
 int main(int argc, char* argv[]) {

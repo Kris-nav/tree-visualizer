@@ -19,6 +19,7 @@ options.style.marginBottom = "12px";
 options.innerHTML = `
   <label>Function:
     <select id="function">
+      <option>sibling</option>
       <option>addRoot</option><option>addLeft</option><option>addRight</option>
       <option>depth</option><option>height</option><option>remove</option>
       <option>preorder</option><option>inorder</option>
@@ -328,8 +329,14 @@ const traversalAnswers = {
 const isTraversal = () => functionMenu.value in traversalAnswers;
 const words = text => text.trim().split(/\s+/).filter(Boolean);
 
+// sibling(n) uses the tree on its slide. 0 means the answer is NULL.
+const siblingStart = { sibling: 4 };
+const siblingAnswers = { 1: 0, 2: 3, 3: 2, 4: 5, 5: 4, 6: 0, 7: 0 };
+const isSibling = () => functionMenu.value === "sibling";
+
 function selectedCall() {
   const name = functionMenu.value;
+  if (isSibling()) return `sibling(node ${siblingStart.sibling})`;
   if (isBst()) {
     return `BST ${name.slice(3).toLowerCase()} (explore mode)`;
   }
@@ -351,7 +358,7 @@ function startingTree() {
     return { ...JSON.parse(JSON.stringify(bstTree)), line: 0, variables: {} };
   }
   const node = (elem, parent) => ({ elem, left: null, right: null, parent });
-  if (isTraversal()) {
+  if (isTraversal() || isSibling()) {
     state.nodes[1] = node(1, null);
     for (const [parent, side, child] of removeCases[4].links) {
       state.nodes[parent][side] = String(child);
@@ -359,6 +366,7 @@ function startingTree() {
     }
     state.root = "1";
     state.size = 7;
+    if (isSibling()) state.variables = { n: String(siblingStart.sibling) };
     return state;
   }
   if (isRemove()) {
@@ -437,7 +445,9 @@ function layout(state) {
 }
 
 function draw(state) {
-  status.textContent = isBst()
+  status.textContent = isSibling()
+    ? "Click a node to use it as n. Green circle = the node that was returned."
+    : isBst()
     ? `size = ${state.size}  |  yellow = current (p), purple = path, ` +
       "green = successor (r), faded = ruled out"
     : isTraversal()
@@ -525,12 +535,13 @@ function draw(state) {
       picture.append(svg("text", { x, y: y + 46, fill: "#f85149",
         "text-anchor": "middle", "font-size": 14 }, "freed"));
     }
-    if (isRecursive()) {
+    if (isRecursive() || isSibling()) {
+      const choices = isSibling() ? siblingStart : startNode;
       for (const part of [circle, label]) {
         part.style.cursor = "pointer";
         part.addEventListener("click", () => {
           if (busy) return;
-          startNode[functionMenu.value] = Number(key);
+          choices[functionMenu.value] = node.elem;  // the number in the circle
           reset();
         });
       }
@@ -944,6 +955,48 @@ function traversalHints(result) {
   return text;
 }
 
+function siblingHints(result) {
+  if (result.crash === "SIGINT") {
+    return "Stopped: it ran too long. Check the highlighted line for an endless loop.";
+  }
+  if (result.crash) {
+    return `Your program stopped (${result.crash}) on the highlighted line. ` +
+      "The root has no parent, so check for that before using n->parent.";
+  }
+  const target = siblingStart.sibling;
+  const expected = siblingAnswers[target];
+  const name = value => value === 0 ? "NULL" : `node ${value}`;
+  const last = result.steps[result.steps.length - 1];
+  const hints = [];
+  if (result.returned !== expected) {
+    hints.push(`sibling(node ${target}) should return ${name(expected)}, ` +
+      `but your function returned ${name(result.returned)}.`);
+  }
+  // Compare node by node, because the nodes may be listed in a different order
+  const picture = tree => JSON.stringify([tree.root, tree.size,
+    Object.keys(tree.nodes).sort().map(key => [key, tree.nodes[key]])]);
+  if (picture(last) !== picture(result.start)) {
+    hints.push("sibling should only look at the tree, not change it.");
+  }
+  let text;
+  if (hints.length) {
+    text = "Logic hint: " + hints.join(" ");
+  } else {
+    const why = target === 1 ? " The root has no parent."
+      : expected === 0 ? " Its parent has no other child." : "";
+    text = `Finished. sibling(node ${target}) returned ${name(expected)}.` + why;
+  }
+  // Turn the returned node green on the last step
+  if (result.returned > 0) {
+    const key = Object.keys(last.nodes)
+      .find(k => last.nodes[k].elem === result.returned);
+    result.steps[result.steps.length - 1] =
+      { ...last, marks: { [key]: "done" } };
+  }
+  if (result.warnings) text += "\n\nCompiler warnings:\n" + result.warnings;
+  return text;
+}
+
 function findHints(result) {
   if (result.crash === "SIGINT") {
     return "Stopped: it ran too long. Check the highlighted line for an endless loop.";
@@ -1072,7 +1125,8 @@ runButton.addEventListener("click", async () => {
       body: JSON.stringify({ code: complete.text, function: functionMenu.value,
                              taken: takenBox.checked,
                              target: isRemove() ? Number(caseMenu.value)
-                               : startNode[functionMenu.value] || 1 })
+                               : siblingStart[functionMenu.value] ||
+                                 startNode[functionMenu.value] || 1 })
     });
     if (!response.ok) throw new Error("server error " + response.status);
     const result = await response.json();
@@ -1091,8 +1145,9 @@ runButton.addEventListener("click", async () => {
         finalMessage = isTraversal() ? traversalHints(result)
           : recursiveHints(result);
       } else {
+        finalMessage = isSibling() ? siblingHints(result)
+          : isRemove() ? removeHints(result) : findHints(result);
         steps = [result.start, ...result.steps];
-        finalMessage = isRemove() ? removeHints(result) : findHints(result);
       }
       codeView.replaceChildren(...complete.text.split("\n").map((text, i) => {
         const row = document.createElement("div");
@@ -1131,7 +1186,7 @@ speed.disabled = false;
 function changeOptions() {
   document.getElementById("takenLabel").hidden =
     functionMenu.value === "addRoot" || isRecursive() || isRemove() ||
-    isTraversal() || isBst();
+    isTraversal() || isBst() || isSibling();
   bstOptions.hidden = !isBst();
   document.getElementById("caseLabel").hidden = !isRemove();
   document.getElementById("versionLabel").hidden = !isRemove();

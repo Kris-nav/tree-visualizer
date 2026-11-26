@@ -144,7 +144,7 @@ while len(steps) < 200 and crash is None and in_student_function():
         steps.append(last)
 
 # Let main() finish, so that it can save what remove() returned
-if FUNCTION == "remove" and crash is None and gdb.selected_inferior().pid != 0 \
+if FUNCTION in ("remove", "sibling") and crash is None and gdb.selected_inferior().pid != 0 \
         and not in_student_function():
     gdb.execute("continue")
 
