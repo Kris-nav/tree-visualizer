@@ -23,6 +23,9 @@ options.innerHTML = `
       <option>depth</option><option>height</option><option>remove</option>
       <option>preorder</option><option>inorder</option>
       <option>postorder</option><option>breadthfirst</option>
+      <option value="bstSearch">BST search (explore)</option>
+      <option value="bstInsert">BST insert (explore)</option>
+      <option value="bstDelete">BST delete (explore)</option>
     </select>
   </label>
   <label id="versionLabel">Code:
@@ -87,6 +90,234 @@ const callsBox = document.createElement("div");
 callsBox.id = "calls";
 visual.after(callsBox);
 
+// ---- Binary search tree: Explore mode (no student code, no C++) ----
+const bstSteps = {
+  bstSearch: [
+    "Start at the root.",
+    "Compare the key with the current node.",
+    "Smaller: go left.",
+    "Greater: go right.",
+    "Equal: the key is found.",
+    "No child there: the key is not found."
+  ],
+  bstInsert: [
+    "Start at the root.",
+    "Compare the new key with the current node.",
+    "Smaller: go left.",
+    "Greater: go right.",
+    "Equal: the key already exists, so only its value is reassigned.",
+    "No child there: add the new node here as a leaf."
+  ],
+  bstDelete: [
+    "Search for the key, starting at the root.",
+    "Smaller: go left.",
+    "Greater: go right.",
+    "No child there: the key is not found, so nothing changes.",
+    "Found, no children: remove the node.",
+    "Found, one child: the child moves up.",
+    "Found, two children: find the successor. Go right once.",
+    "Keep going left until there is no left child.",
+    "Copy the successor's key into the found node.",
+    "Remove the successor's old node."
+  ]
+};
+const isBst = () => functionMenu.value in bstSteps;
+let bstTree = null;  // keeps your inserts and deletes until Reset
+
+const bstOptions = document.createElement("span");
+bstOptions.innerHTML = `
+  <label>Key: <input type="number" id="bstKey" value="32" min="0" max="999"
+    style="width:80px"></label>
+  <label>Starting tree:
+    <select id="bstStart">
+      <option value="basic">Search and insert slides</option>
+      <option value="delete">Delete slides (adds 15 and 87)</option>
+    </select>
+  </label>`;
+options.append(bstOptions);
+const keyInput = document.getElementById("bstKey");
+const bstStart = document.getElementById("bstStart");
+const codeTitle = codeBox.parentElement.querySelector("h2");
+const codeTitleText = codeTitle?.textContent;
+
+function addLeaf(tree, parent, side, key) {
+  const id = `b${tree.nextId++}`;
+  tree.nodes[id] = { elem: key, left: null, right: null, parent };
+  if (parent === null) tree.root = id;
+  else tree.nodes[parent][side] = id;
+  tree.size++;
+  return id;
+}
+
+function newBst() {
+  const tree = { root: null, size: 0, nodes: {}, nextId: 1 };
+  const keys = [55, 21, 82, 11, 45, 67, 94, 7, 32, 48, 89];
+  if (bstStart.value === "delete") keys.push(15, 87);
+  for (const key of keys) {
+    let parent = null;
+    let side = null;
+    let at = tree.root;
+    while (at !== null) {
+      parent = at;
+      side = key < tree.nodes[at].elem ? "left" : "right";
+      at = tree.nodes[at][side];
+    }
+    addLeaf(tree, parent, side, key);
+  }
+  return tree;
+}
+
+function subtree(tree, id) {
+  if (id === null) return [];
+  const node = tree.nodes[id];
+  return [id, ...subtree(tree, node.left), ...subtree(tree, node.right)];
+}
+
+// Runs one operation and returns a picture for every step
+function bstRun(operation, key) {
+  const tree = bstTree;
+  const states = [];
+  const path = new Set();
+  const faded = new Set();  // parts that the search has ruled out
+  const lineOf = start => bstSteps[operation].findIndex(t => t.startsWith(start)) + 1;
+
+  function record(start, text, labels = {}) {
+    const marks = {};
+    for (const id of path) marks[id] = "waiting";
+    if (labels.p) marks[labels.p] = "running";
+    if (labels.r) marks[labels.r] = "done";
+    states.push(JSON.parse(JSON.stringify({
+      root: tree.root, size: tree.size, nodes: tree.nodes, variables: labels,
+      marks, faded: [...faded], line: start ? lineOf(start) : 0, text
+    })));
+  }
+
+  // Takes out a node that has at most one child
+  function unlink(id) {
+    const { left, right, parent } = tree.nodes[id];
+    const child = left ?? right;
+    if (parent === null) tree.root = child;
+    else {
+      const side = tree.nodes[parent].left === id ? "left" : "right";
+      tree.nodes[parent][side] = child;
+    }
+    if (child !== null) tree.nodes[child].parent = parent;
+    delete tree.nodes[id];
+    path.delete(id);
+    tree.size--;
+  }
+
+  record(null, "This is the tree before the operation.");
+  let p = tree.root;
+  if (p === null) {
+    if (operation === "bstInsert") {
+      p = addLeaf(tree, null, null, key);
+      record("No child", `The tree is empty, so ${key} becomes the root.`, { p });
+    } else {
+      record(operation === "bstSearch" ? "No child" : "No child",
+        `The tree is empty, so ${key} is not found.`);
+    }
+    return states;
+  }
+  record(operation === "bstDelete" ? "Search" : "Start",
+    `Start at the root, ${tree.nodes[p].elem}.`, { p });
+
+  while (tree.nodes[p].elem !== key) {
+    const here = tree.nodes[p].elem;
+    if (operation !== "bstDelete") {
+      record("Compare", `Compare ${key} with ${here}.`, { p });
+    }
+    const side = key < here ? "left" : "right";
+    const other = side === "left" ? "right" : "left";
+    for (const id of subtree(tree, tree.nodes[p][other])) faded.add(id);
+    const sign = key < here ? "<" : ">";
+    record(key < here ? "Smaller" : "Greater",
+      `${key} ${sign} ${here}, so go ${side.toUpperCase()}.`, { p });
+    path.add(p);
+    if (tree.nodes[p][side] === null) {
+      if (operation === "bstInsert") {
+        const added = addLeaf(tree, p, side, key);
+        record("No child", `${here} has no ${side} child, so ${key} becomes ` +
+          `its ${side} child.`, { p: added });
+      } else {
+        record("No child", `${here} has no ${side} child. ${key} is not found.` +
+          (operation === "bstDelete" ? " Nothing changes." : ""), { p });
+      }
+      return states;
+    }
+    p = tree.nodes[p][side];
+  }
+
+  if (operation === "bstSearch") {
+    record("Equal", `${key} = ${key}. Found it!`, { p });
+    return states;
+  }
+  if (operation === "bstInsert") {
+    record("Equal", `${key} is already in the tree. No new node is added; ` +
+      "its value would be reassigned.", { p });
+    return states;
+  }
+
+  const { left, right } = tree.nodes[p];
+  if (left === null || right === null) {
+    const start = left === null && right === null ? "Found, no" : "Found, one";
+    const childId = left ?? right;
+    record(start, childId === null
+      ? `Found ${key}. It is a leaf.`
+      : `Found ${key}. Its only child, ${tree.nodes[childId].elem}, will move up.`,
+      { p });
+    unlink(p);
+    record(start, childId === null
+      ? `${key} has been removed.`
+      : `${tree.nodes[childId].elem} took the place of ${key}.`);
+    return states;
+  }
+
+  let r = right;
+  record("Found, two", `${key} has two children. To find the successor, go ` +
+    `right once to ${tree.nodes[r].elem}.`, { p, r });
+  while (tree.nodes[r].left !== null) {
+    r = tree.nodes[r].left;
+    record("Keep going", `Go left to ${tree.nodes[r].elem}.`, { p, r });
+  }
+  const successor = tree.nodes[r].elem;
+  record("Keep going", `${successor} has no left child, so it is the successor.`,
+    { p, r });
+  tree.nodes[p].elem = successor;
+  record("Copy", `Copy ${successor} into the node that held ${key}. For a ` +
+    `moment, ${successor} appears twice.`, { p, r });
+  unlink(r);
+  record("Remove the successor", `The old ${successor} node is removed. ` +
+    "Delete is finished.", { p });
+  return states;
+}
+
+function showSteps(lines) {
+  codeView.replaceChildren(...lines.map((text, i) => {
+    const row = document.createElement("div");
+    row.textContent = `${String(i + 1).padStart(3)}  ${text}`;
+    row.style.whiteSpace = "pre-wrap";
+    return row;
+  }));
+  codeBox.hidden = true;
+  codeView.hidden = false;
+}
+
+function runBst() {
+  const key = Number(keyInput.value);
+  if (keyInput.value === "" || !Number.isInteger(key) || key < 0 || key > 999) {
+    message.textContent = "Type a whole number from 0 to 999 as the key.";
+    return;
+  }
+  reset();
+  if (functionMenu.value === "bstInsert" && bstTree.size >= 20) {
+    message.textContent = "The practice tree is full (20 nodes). Click Reset.";
+    return;
+  }
+  steps = bstRun(functionMenu.value, key);
+  start();
+}
+
 // What each traversal should print for the sample tree
 const traversalAnswers = {
   preorder: "1 2 4 5 7 3 6",
@@ -99,6 +330,9 @@ const words = text => text.trim().split(/\s+/).filter(Boolean);
 
 function selectedCall() {
   const name = functionMenu.value;
+  if (isBst()) {
+    return `BST ${name.slice(3).toLowerCase()} (explore mode)`;
+  }
   if (isTraversal()) return `${name}()`;
   if (isRemove()) return `remove(node ${removeCases[caseMenu.value].target})`;
   if (isRecursive()) return `${name}() starting at node ${startNode[name]}`;
@@ -112,6 +346,10 @@ function startingTree() {
   const name = functionMenu.value;
   const state = { line: 0, root: null, size: 0, variables: {}, nodes: {} };
   if (name === "addRoot") return state;
+  if (isBst()) {
+    bstTree ??= newBst();
+    return { ...JSON.parse(JSON.stringify(bstTree)), line: 0, variables: {} };
+  }
   const node = (elem, parent) => ({ elem, left: null, right: null, parent });
   if (isTraversal()) {
     state.nodes[1] = node(1, null);
@@ -199,7 +437,10 @@ function layout(state) {
 }
 
 function draw(state) {
-  status.textContent = isTraversal()
+  status.textContent = isBst()
+    ? `size = ${state.size}  |  yellow = current (p), purple = path, ` +
+      "green = successor (r), faded = ruled out"
+    : isTraversal()
     ? (functionMenu.value === "breadthfirst"
       ? "Gray = not queued, purple = in the queue, yellow = n, green = finished."
       : "Blue = not reached, yellow = current, purple = waiting, green = printed.") +
@@ -293,6 +534,10 @@ function draw(state) {
           reset();
         });
       }
+    }
+    if (state.faded?.includes(key)) {
+      circle.setAttribute("opacity", 0.3);
+      label.setAttribute("opacity", 0.4);
     }
     picture.append(circle, label);
     if (state.order && key in state.order) {
@@ -525,6 +770,11 @@ function show(index) {
   message.textContent = current === steps.length - 1 && finalMessage
     ? finalMessage
     : `Step ${current} of ${steps.length - 1}. The highlighted line has just run.`;
+  if (isBst()) {
+    message.textContent = steps.length < 2
+      ? "Choose a key, then click Run. Explore mode does not run or check code."
+      : `Step ${current} of ${steps.length - 1}. ${state.text}`;
+  }
   if ((isRecursive() || isTraversal()) && current > 0) {
     message.textContent = `Step ${current} of ${steps.length - 1}. ${state.text}` +
       (current === steps.length - 1 ? "\n\n" + finalMessage : "");
@@ -774,12 +1024,22 @@ function reset() {
   finalMessage = "";
   codeBox.hidden = false;
   codeView.hidden = true;
+  if (codeTitle) {
+    codeTitle.textContent = isBst() ? "Algorithm steps (not C++)" : codeTitleText;
+  }
+  if (isBst()) showSteps(bstSteps[functionMenu.value]);
   show(0);
-  message.textContent = `Type your ${functionMenu.value} function, then click Run.`;
+  message.textContent = isBst()
+    ? "Choose a key, then click Run. Reset restores the starting tree."
+    : `Type your ${functionMenu.value} function, then click Run.`;
   codeBox.placeholder = `Type your ${functionMenu.value} function here...`;
 }
 
 runButton.addEventListener("click", async () => {
+  if (isBst()) {
+    runBst();
+    return;
+  }
   if (codeBox.value.trim() === "") {
     message.textContent = "Please type your function first.";
     return;
@@ -853,7 +1113,14 @@ runButton.addEventListener("click", async () => {
   busy = false;
 });
 
-resetButton.addEventListener("click", reset);
+resetButton.addEventListener("click", () => {
+  bstTree = null;
+  reset();
+});
+bstStart.addEventListener("change", () => {
+  bstTree = null;
+  reset();
+});
 back.addEventListener("click", () => { stop(); show(current - 1); });
 next.addEventListener("click", () => { stop(); show(current + 1); });
 play.addEventListener("click", start);
@@ -864,7 +1131,8 @@ speed.disabled = false;
 function changeOptions() {
   document.getElementById("takenLabel").hidden =
     functionMenu.value === "addRoot" || isRecursive() || isRemove() ||
-    isTraversal();
+    isTraversal() || isBst();
+  bstOptions.hidden = !isBst();
   document.getElementById("caseLabel").hidden = !isRemove();
   document.getElementById("versionLabel").hidden = !isRemove();
   reset();
