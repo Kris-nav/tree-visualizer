@@ -138,7 +138,7 @@ bstOptions.innerHTML = `
 options.append(bstOptions);
 const keyInput = document.getElementById("bstKey");
 const bstStart = document.getElementById("bstStart");
-const codeTitle = codeBox.parentElement.querySelector("h2");
+const codeTitle = codeBox.closest(".panel").querySelector("h2");
 const codeTitleText = codeTitle?.textContent;
 
 function addLeaf(tree, parent, side, key) {
@@ -774,6 +774,14 @@ function show(index) {
   showCalls(state);
   [...codeView.children].forEach((row, i) =>
     row.classList.toggle("active", i + 1 === state.line));
+  const activeRow = codeView.querySelector(".active");
+  if (activeRow) {
+    const top = activeRow.offsetTop - codeView.offsetTop;
+    if (top < codeView.scrollTop ||
+        top + activeRow.offsetHeight > codeView.scrollTop + codeView.clientHeight) {
+      codeView.scrollTop = top - codeView.clientHeight / 2;
+    }
+  }
   back.disabled = current === 0;
   next.disabled = current === steps.length - 1;
   play.disabled = steps.length < 2 || timer !== null;
@@ -1197,3 +1205,62 @@ takenBox.addEventListener("change", reset);
 caseMenu.addEventListener("change", reset);
 versionMenu.addEventListener("change", reset);
 changeOptions();
+
+// ---- Appearance only: line numbers and C++ colors ----
+const gutter = document.getElementById("gutter");
+
+function updateLineNumbers() {
+  const count = codeBox.value.split("\n").length;
+  gutter.textContent = Array.from({ length: count }, (_, i) => i + 1).join("\n");
+  gutter.scrollTop = codeBox.scrollTop;
+}
+
+codeBox.addEventListener("input", updateLineNumbers);
+codeBox.addEventListener("scroll", () => { gutter.scrollTop = codeBox.scrollTop; });
+updateLineNumbers();
+
+const tokenPattern = new RegExp([
+  /(\/\/.*|\/\*.*?(?:\*\/|$))/,                       // comment
+  /("(?:\\.|[^"\\])*"?|'(?:\\.|[^'\\])*'?)/,          // text in quotes
+  /\b(if|else|while|for|return|throw|new|delete|class|struct|public|private|virtual|override|const|using|namespace|break|continue|this|true|false|NULL|nullptr)\b/,
+  /\b(int|void|bool|char|string|node|Queue|ArrayQueue)\b/,
+  /\b(\d+)\b/
+].map(part => part.source).join("|"), "g");
+const tokenNames = ["comment", "string", "keyword", "type", "number"];
+
+function span(text, className) {
+  const element = document.createElement("span");
+  element.textContent = text;
+  element.className = className;
+  return element;
+}
+
+// Each time the code view is filled, style its numbers and color the C++
+new MutationObserver(() => {
+  for (const row of codeView.children) {
+    if (row.querySelector(".num")) continue;
+    const found = row.textContent.match(/^(\s*\d+)  (.*)$/s);
+    if (!found) continue;
+    const [, number, code] = found;
+    const parts = [span(number.trim(), "num")];
+    let end = 0;
+    // BST explore mode shows plain English, so it gets no C++ colors
+    for (const match of isBst() ? [] : code.matchAll(tokenPattern)) {
+      const kind = tokenNames[match.slice(1).findIndex(group => group !== undefined)];
+      parts.push(code.slice(end, match.index), span(match[0], `tok-${kind}`));
+      end = match.index + match[0].length;
+    }
+    parts.push(code.slice(end));
+    row.replaceChildren(...parts);
+  }
+}).observe(codeView, { childList: true });
+
+// Stops small trees from being stretched to fill a large screen
+new MutationObserver(() => {
+  const picture = visual.querySelector("svg");
+  if (!picture) return;
+  const [, , width, height] = picture.getAttribute("viewBox").split(" ").map(Number);
+  picture.style.maxWidth = `${width * 1.15}px`;
+  picture.style.maxHeight = `${height * 1.15}px`;
+}).observe(visual, { childList: true });
+show(current);

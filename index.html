@@ -8,31 +8,36 @@
 </head>
 <body>
   <main>
-    <h1>Binary Tree Visualizer</h1>
+    <header class="topbar">
+      <h1>Binary Tree Visualizer</h1>
 
-    <section class="panel">
+      <div class="controls">
+        <button id="run">Run</button>
+        <button disabled>Back</button>
+        <button disabled>Play</button>
+        <button disabled>Pause</button>
+        <button disabled>Next</button>
+        <button id="reset">Reset</button>
+        <label>Speed <input type="range" min="1" max="5" value="3" disabled></label>
+      </div>
+    </header>
+
+    <section class="panel visual-panel">
       <h2>Visual: addRoot(1)</h2>
       <p>root = NULL &nbsp; | &nbsp; size = 0</p>
       <div id="visual">Empty tree</div>
     </section>
 
-    <div class="controls">
-      <button id="run">Run</button>
-      <button disabled>Back</button>
-      <button disabled>Play</button>
-      <button disabled>Pause</button>
-      <button disabled>Next</button>
-      <button id="reset">Reset</button>
-      <label>Speed <input type="range" min="1" max="5" value="3" disabled></label>
-    </div>
-
-    <section class="panel">
+    <section class="panel code-panel">
       <h2>Your Code</h2>
-      <textarea id="code" rows="12" spellcheck="false"
-        placeholder="Type your addRoot function here..."></textarea>
+      <div class="editor">
+        <pre id="gutter" aria-hidden="true">1</pre>
+        <textarea id="code" wrap="off" spellcheck="false"
+          placeholder="Type your addRoot function here..."></textarea>
+      </div>
     </section>
 
-    <section class="panel">
+    <section class="panel message-panel">
       <h2>Errors and Hints</h2>
       <p id="message">Type your function, then click Run.</p>
     </section>

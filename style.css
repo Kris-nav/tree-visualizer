@@ -2,92 +2,290 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
-  padding: 20px;
   background: #0d1117;
   color: #e6edf3;
   font-family: sans-serif;
 }
 
+/* ---- Page layout: top bar, code on the left, visual on the right ---- */
 main {
-  max-width: 800px;
-  margin: auto;
+  display: grid;
+  grid-template-columns: minmax(360px, 40%) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) minmax(120px, 26%);
+  grid-template-areas:
+    "top top"
+    "code visual"
+    "message visual";
+  height: 100vh;
+}
+
+.topbar        { grid-area: top; }
+.code-panel    { grid-area: code; }
+.visual-panel  { grid-area: visual; }
+.message-panel { grid-area: message; }
+
+/* ---- Top bar ---- */
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 10px 14px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
 }
 
 h1 {
-  text-align: center;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+/* The function menus (added by script.js) */
+.topbar > div:not(.controls) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 0 !important;
+  font-size: 14px;
+}
+
+#bstOptions, .topbar span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-basis: 100%;
+}
+
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+select,
+input[type="number"] {
+  padding: 5px 8px;
+  background: #0d1117;
+  color: #e6edf3;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+}
+
+button {
+  padding: 7px 16px;
+  background: transparent;
+  color: #e6edf3;
+  border: 1px solid #238636;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #238636;
+}
+
+#run {
+  background: #238636;
+}
+
+button:disabled {
+  border-color: #30363d;
+  color: #8b949e;
+  cursor: not-allowed;
+}
+
+/* ---- Panels ---- */
+.panel {
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 14px;
+  background: #161b22;
 }
 
 h2 {
-  margin-top: 0;
-  font-size: 1rem;
+  margin: 0 0 8px;
+  font-size: 0.9rem;
 }
 
-.panel {
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 16px;
+.code-panel {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #30363d;
+}
+
+.message-panel {
+  overflow: auto;
+  border-top: 1px solid #30363d;
+  border-right: 1px solid #30363d;
+}
+
+.visual-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  background: #0d1117;
+}
+
+.visual-panel p {
+  margin: 0;
+  color: #8b949e;
+  font-size: 14px;
 }
 
 #visual {
-  height: 280px;
+  flex: 1 0 280px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #8b949e;
 }
 
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 16px;
+input[type="range"] {
+  accent-color: #238636;
 }
 
-button {
-  padding: 8px 16px;
-  border: none;
+/* ---- Waiting calls, queue and output ---- */
+#calls {
+  flex-shrink: 0;
+  max-height: 45%;
+  overflow: auto;
+  margin-top: 12px;
+}
+
+#calls .card {
+  border: 1px solid #8957e5;
   border-radius: 6px;
-  background: #238636;
-  color: white;
-  cursor: pointer;
-}
-
-button:disabled {
-  background: #30363d;
-  color: #8b949e;
-  cursor: not-allowed;
-}
-
-textarea {
-  width: 100%;
-  padding: 12px;
-  background: #0d1117;
-  color: #e6edf3;
-  border: 1px solid #30363d;
-  border-radius: 6px;
+  padding: 8px;
+  margin-top: 6px;
   font-family: monospace;
-  font-size: 15px;
-  resize: vertical;
 }
-#message {
-  white-space: pre-wrap;
+
+#calls .card.running {
+  border-color: #d29922;
+  background: #3a2f10;
+}
+
+/* ---- Code box with line numbers ---- */
+.editor {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.editor textarea,
+#gutter,
+#codeView {
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+#gutter {
+  min-width: 46px;
+  margin: 0;
+  padding: 8px 10px 40px 6px;
+  overflow: hidden;
+  text-align: right;
+  color: #8b949e;
+  border-right: 1px solid #30363d;
+  user-select: none;
+}
+
+/* Hide the typing line numbers while the highlighted code is shown */
+.editor:has(textarea[hidden]) #gutter {
+  display: none;
+}
+
+.editor textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  background: transparent;
+  color: #e6edf3;
+  border: none;
+  outline: none;
+  resize: none;
+  white-space: pre;
+  overflow: auto;
+}
+
+.editor:focus-within {
+  border-color: #238636;
 }
 
 #codeView {
-  white-space: pre;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
   overflow: auto;
-  font-family: monospace;
-  font-size: 15px;
-  line-height: 1.6;
+  white-space: pre;
+}
+
+#codeView > div {
+  width: max-content;
+  min-width: 100%;
+  padding-right: 10px;
 }
 
 #codeView .active {
   background: #1f4d2b;
 }
 
-#codeView .provided { opacity: 0.55; }
+#codeView .provided {
+  opacity: 0.55;
+}
+
+#codeView .num {
+  display: inline-block;
+  min-width: 46px;
+  padding-right: 10px;
+  margin-right: 10px;
+  text-align: right;
+  color: #8b949e;
+  border-right: 1px solid #30363d;
+  user-select: none;
+}
+
+/* ---- C++ colors in the code view ---- */
+.tok-keyword { color: #d2a8ff; }
+.tok-type    { color: #79c0ff; }
+.tok-string  { color: #a5d6ff; }
+.tok-number  { color: #ffa657; }
+.tok-comment { color: #8b949e; font-style: italic; }
+
+#message {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ---- Narrow window (for example, beside VS Code): stack the panels ---- */
+@media (max-width: 999px) {
+  main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 420px auto;
+    grid-template-areas: "top" "visual" "code" "message";
+    height: auto;
+  }
+}
